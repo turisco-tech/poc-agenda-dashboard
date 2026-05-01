@@ -10,7 +10,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/estatisticas")
-@CrossOrigin(origins = "http://localhost:4200")
+@CrossOrigin(origins = "http://3.86.103.10:4200")
 public class DashboardController {
 
     private final EstatisticaService estatisticaService;
