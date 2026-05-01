@@ -10,7 +10,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/estatisticas")
-@CrossOrigin(origins = "http://3.86.103.10:4200")
+@CrossOrigin(origins = "*")// Libera o CORS para qualquer origem (Ideal para MVP/Dev)
 public class DashboardController {
 
     private final EstatisticaService estatisticaService;
