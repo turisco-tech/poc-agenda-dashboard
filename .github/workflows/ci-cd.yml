@@ -83,7 +83,7 @@ jobs:
     needs: delivery-and-container
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout do código (para ler o task-definition.json)
+      - name: Checkout do código
         uses: actions/checkout@v4
 
       - name: Configurar Credenciais AWS
@@ -93,13 +93,19 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      # 1. Fazemos o login no ECR novamente nesta máquina para pegar a URL do cofre
+      - name: Login no Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 2. Montamos a imagem dinamicamente com o output do passo acima
       - name: Preencher o novo ID da imagem e Variáveis no JSON
         id: render-task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: .aws/task-definition.json
           container-name: dashboard-container
-          image: ${{ needs.delivery-and-container.outputs.image_uri }}
+          image: ${{ steps.login-ecr.outputs.registry }}/poc-agenda-dashboard:${{ github.sha }}
           environment-variables: |
             KAFKA_SERVER=${{ secrets.KAFKA_SERVER }}
             KAFKA_USER=${{ secrets.KAFKA_USER }}
