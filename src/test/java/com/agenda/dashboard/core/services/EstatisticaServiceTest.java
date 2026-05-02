@@ -6,7 +6,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class EstatisticaServiceTest {
 
@@ -66,6 +65,8 @@ class EstatisticaServiceTest {
 
         // Assert
         assertEquals(2, estatisticaService.getTotalContatos(), "Os contatos devem ser contados no total geral");
-        assertTrue(estatisticaService.getContatosPorDominio().isEmpty(), "Não deve tentar agrupar domínios inválidos");
+
+        // A NOVA ASSERÇÃO: Verifica se o nosso fallback entrou em ação e agrupou os 2 na chave 'desconhecido'
+        assertEquals(2, estatisticaService.getContatosPorDominio().get("desconhecido"), "Deve agrupar emails inválidos na chave 'desconhecido'");
     }
 }
