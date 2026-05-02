@@ -19,7 +19,7 @@ public class ContatoCriadoListener {
         this.estatisticaService = estatisticaService;
     }
 
-    @KafkaListener(topics = "contact-created", groupId = "dashboard-group")
+    @KafkaListener(topics = "${app.kafka.topic.contact-created}", groupId = "${spring.kafka.consumer.group-id}")
     public void consumir(String payload) {
         try {
             ContatoCriadoEvent evento = objectMapper.readValue(payload, ContatoCriadoEvent.class);
