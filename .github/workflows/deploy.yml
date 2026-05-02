@@ -61,7 +61,6 @@ jobs:
           task-definition: .aws/task-definition.json
           container-name: dashboard-container
           image: ${{ steps.build-image.outputs.image }}
-          # Aqui é a mágica: Injetando as credenciais do Kafka da Confluent Cloud!
           environment-variables: |
             KAFKA_SERVER=${{ secrets.KAFKA_SERVER }}
             KAFKA_USER=${{ secrets.KAFKA_USER }}
