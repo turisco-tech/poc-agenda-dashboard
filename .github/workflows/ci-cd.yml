@@ -1,0 +1,116 @@
+name: CI/CD Dashboard
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  # ==========================================
+  # ESTÁGIO 1: Integração Contínua e Qualidade
+  # ==========================================
+  integration-and-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build e Análise SonarCloud
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
+
+  # ==========================================
+  # ESTÁGIO 2: Geração e Entrega da Imagem
+  # ==========================================
+  delivery-and-container:
+    needs: integration-and-quality
+    runs-on: ubuntu-latest
+    # Aqui a "mágica" para passar a imagem para o estágio 3
+    outputs:
+      image_uri: ${{ steps.build-image.outputs.image }}
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      # Garantia de build rápido do JAR para o Dockerfile empacotar
+      - name: Setup JDK 21 (Para empacotamento)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+      - name: Gerar artefato (.jar)
+        run: mvn clean package -DskipTests
+
+      - name: Configurar Credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login no Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, Tag e Push da Imagem
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: poc-agenda-dashboard
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          # Passando o bastão para o próximo job
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+  # ==========================================
+  # ESTÁGIO 3: Deploy na AWS ECS
+  # ==========================================
+  deploy-to-aws:
+    needs: delivery-and-container
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código (para ler o task-definition.json)
+        uses: actions/checkout@v4
+
+      - name: Configurar Credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Preencher o novo ID da imagem e Variáveis no JSON
+        id: render-task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: .aws/task-definition.json
+          container-name: dashboard-container
+          image: ${{ needs.delivery-and-container.outputs.image_uri }}
+          environment-variables: |
+            KAFKA_SERVER=${{ secrets.KAFKA_SERVER }}
+            KAFKA_USER=${{ secrets.KAFKA_USER }}
+            KAFKA_PASSWORD=${{ secrets.KAFKA_PASSWORD }}
+            KAFKA_TOPIC=${{ secrets.KAFKA_TOPIC }}
+            KAFKA_GROUP_ID=${{ secrets.KAFKA_GROUP_ID }}
+
+      - name: Deploy no Amazon ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.render-task-def.outputs.task-definition }}
+          service: poc-agenda-dashboard-service
+          cluster: poc-agenda-cluster
+          wait-for-service-stability: true
