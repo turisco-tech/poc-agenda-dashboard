@@ -1,4 +1,4 @@
 package com.agenda.dashboard.core.domain;
 
-public record ContatoDeletadoEvent(String id, String email) {
+public record ContatoDeletadoEvent(String id, String email, long timestamp) {
 }
