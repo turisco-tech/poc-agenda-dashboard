@@ -112,7 +112,8 @@ jobs:
             KAFKA_PASSWORD=${{ secrets.KAFKA_PASSWORD }}
             KAFKA_TOPIC=${{ secrets.KAFKA_TOPIC }}
             KAFKA_GROUP_ID=${{ secrets.KAFKA_GROUP_ID }}
-            SPRING_MONGODB_URI=${{ secrets.SPRING_MONGODB_URI }}
+            SPRING_DATA_MONGODB_URI=${{ secrets.SPRING_DATA_MONGODB_URI }}
+            SPRING_DATA_MONGODB_DATABASE=dashboard_db
 
       - name: Deploy no Amazon ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
