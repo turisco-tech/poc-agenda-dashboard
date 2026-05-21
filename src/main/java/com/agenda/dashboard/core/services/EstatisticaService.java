@@ -29,7 +29,6 @@ public class EstatisticaService {
 
     public void processarNovoContato(ContatoCriadoEvent evento) {
         String dominio = extrairDominio(evento.email());
-
         Query query = new Query(Criteria.where("id").is(DOC_ID));
 
         // Operação Atômica: O banco incrementa sozinho. Zero risco de concorrência!
@@ -43,14 +42,19 @@ public class EstatisticaService {
 
     public void processarContatoExcluido(ContatoDeletadoEvent evento) {
         String dominio = extrairDominio(evento.email());
-        Query query = new Query(Criteria.where("id").is(DOC_ID));
 
-        // Subtrai de forma atômica
+        // Ajuste: A query agora garante que o decremento só ocorre se o contador for > 0,
+        // ou usamos o operador $max para garantir que nunca fique negativo.
+        Query query = new Query(Criteria.where("id").is(DOC_ID)
+                .and("totalContatos").gt(0)
+                .and("contatosPorDominio." + dominio).gt(0));
+
         Update update = new Update()
                 .inc("totalContatos", -1)
                 .inc("contatosPorDominio." + dominio, -1);
 
-        mongoTemplate.upsert(query, update, EstatisticaDocument.class);
+        // Se a query não encontrar o documento (ou o contador já for 0), nada é subtraído
+        mongoTemplate.updateFirst(query, update, EstatisticaDocument.class);
     }
 
     // O Motor de Transferência de Estatísticas
@@ -61,11 +65,11 @@ public class EstatisticaService {
         if (!dominioAntigo.equals(dominioNovo)) {
             Query query = new Query(Criteria.where("id").is(DOC_ID));
 
-            // 1. Subtrai 1 do domínio velho
+            // Decremento com trava de segurança para não negativar
+            Query queryRemover = new Query(Criteria.where("id").is(DOC_ID).and("contatosPorDominio." + dominioAntigo).gt(0));
             Update updateRemover = new Update().inc("contatosPorDominio." + dominioAntigo, -1);
-            mongoTemplate.upsert(query, updateRemover, EstatisticaDocument.class);
+            mongoTemplate.updateFirst(queryRemover, updateRemover, EstatisticaDocument.class);
 
-            // 2. Soma 1 no domínio novo
             Update updateAdicionar = new Update().inc("contatosPorDominio." + dominioNovo, 1);
             mongoTemplate.upsert(query, updateAdicionar, EstatisticaDocument.class);
         }
